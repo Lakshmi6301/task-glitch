@@ -1,8 +1,13 @@
 import { DerivedTask, Task } from '@/types';
 
-export function computeROI(revenue: number, timeTaken: number): number | null {
-  // Injected bug intentionally left for Bug 5
-  return revenue / (timeTaken as number);
+/**
+ *  BUG 5 FIX
+ * Safe ROI calculation
+ */
+export function computeROI(revenue: number, timeTaken: number): number {
+  if (!Number.isFinite(revenue)) return 0;
+  if (!Number.isFinite(timeTaken) || timeTaken <= 0) return 0;
+  return revenue / timeTaken;
 }
 
 export function computePriorityWeight(priority: Task['priority']): 3 | 2 | 1 {
@@ -25,26 +30,18 @@ export function withDerived(task: Task): DerivedTask {
 }
 
 /**
- * BUG 3 FIX
- * Stable + deterministic sorting:
- * 1. ROI (desc)
- * 2. Priority (High > Medium > Low)
- * 3. Title (alphabetical) — tie-breaker
+ * BUG 3 FIX (already done)
+ * Stable + deterministic sorting
  */
 export function sortTasks(tasks: ReadonlyArray<DerivedTask>): DerivedTask[] {
   return [...tasks].sort((a, b) => {
     const aROI = a.roi ?? -Infinity;
     const bROI = b.roi ?? -Infinity;
 
-    // Primary: ROI (descending)
     if (bROI !== aROI) return bROI - aROI;
-
-    // Secondary: Priority
     if (b.priorityWeight !== a.priorityWeight) {
       return b.priorityWeight - a.priorityWeight;
     }
-
-    // Tertiary: Stable tie-breaker (title)
     return a.title.localeCompare(b.title);
   });
 }
@@ -72,12 +69,12 @@ export function computeRevenuePerHour(tasks: ReadonlyArray<Task>): number {
 }
 
 export function computeAverageROI(tasks: ReadonlyArray<Task>): number {
-  const rois = tasks
-    .map(t => computeROI(t.revenue, t.timeTaken))
-    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-
-  if (rois.length === 0) return 0;
-  return rois.reduce((s, r) => s + r, 0) / rois.length;
+  if (tasks.length === 0) return 0;
+  const total = tasks.reduce(
+    (sum, t) => sum + computeROI(t.revenue, t.timeTaken),
+    0
+  );
+  return total / tasks.length;
 }
 
 export function computePerformanceGrade(
